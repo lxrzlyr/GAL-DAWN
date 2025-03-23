@@ -2,6 +2,7 @@
 file(GLOB SOURCES_CPP "${CMAKE_SOURCE_DIR}/src/algorithm/cpu/*.cpp" "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
 # Add the executable
+# add_executable(bc_cpu bc_cpu.cpp ${SOURCES_CPP})
 add_executable(bc_cpu bc_cpu.cpp ${SOURCES_CPP})
 
 # Include directories

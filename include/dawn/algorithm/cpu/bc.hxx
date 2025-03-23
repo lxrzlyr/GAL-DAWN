@@ -12,24 +12,22 @@ namespace BC_CPU {
 
 float Betweenness_Centrality(Graph::Graph_t& graph, std::string& output_path);
 
-float SOVM(int* row_ptr, int* col, int row, int source, float*& bc_temp);
+float Betweenness_Centrality_run(int* row_ptr,
+                                 int* col,
+                                 int node,
+                                 int n,
+                                 float*& bc);
 
 bool kernel(int* row_ptr,
             int* col,
             int row,
-            bool*& alpha,
-            bool*& beta,
-            bool*& gamma,
-            int*& amount,
-            std::vector<std::queue<int>>& path,
-            std::deque<int>& path_length,
-            float*& bc_temp,
-            int step,
-            bool is_converged,
-            int source);
-void accumulate(std::vector<std::queue<int>>& path,
-                std::deque<int>& path_length,
-                float*& bc_temp,
-                int source);
+            std::vector<bool>& alpha,
+            std::vector<bool>& beta,
+            std::vector<int>& distance,
+            std::vector<std::vector<int>>& Pretree,
+            std::vector<float>& visit,
+            std::vector<int>& prequeue,
+            int& index,
+            int step);
 }  // namespace BC_CPU
 }  // namespace DAWN

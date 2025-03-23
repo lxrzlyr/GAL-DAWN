@@ -64,14 +64,20 @@ void DAWN::Graph::createGraph(std::string& input_path, Graph::Graph_t& graph) {
   std::cout << "Read Input Graph" << std::endl;
 
   if (graph.directed) {
-    if (graph.weighted)
+    if (graph.weighted) {
       DAWN::IO::readGraph_Directed_Weighted(input_path, graph);
-    else
+      // std::cout << "readGraph_Directed_Weighted" << std::endl;
+    } else {
+      // std::cout << "readGraph_Directed" << std::endl;
       DAWN::IO::readGraph_Directed(input_path, graph);
+    }
   } else {
-    if (graph.weighted)
+    if (graph.weighted) {
       DAWN::IO::readGraph_Weighted(input_path, graph);
-    else
+      // std::cout << "readGraph_Weighted" << std::endl;
+    } else {
       DAWN::IO::readGraph(input_path, graph);
+      // std::cout << "readGraph" << std::endl;
+    }
   }
 }

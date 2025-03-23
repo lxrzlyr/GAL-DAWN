@@ -14,16 +14,6 @@ int main(int argc, char* argv[]) {
   graph.print = true;
   graph.interval = 100;
 
-  // if (weighted == "true") {
-  //   graph.weighted = false;
-  //   DAWN::Graph::createGraph(input_path, graph);
-
-  //   float elapsed_time =
-  //       DAWN::BC_CPU::Betweenness_Centrality(graph, output_path);
-  //   printf("%-21s%3.5d\n", "Nodes:", graph.rows);
-  //   printf("%-21s%3.5ld\n", "Edges:", graph.nnz);
-  //   printf("%-21s%3.5lf\n", "Time:", elapsed_time);
-  // } else {
   graph.weighted = false;
   DAWN::Graph::createGraph(params.input_path, graph);
   printf("%-21s%3.5d\n", "Nodes:", graph.rows);
@@ -31,7 +21,6 @@ int main(int argc, char* argv[]) {
   float elapsed_time =
       DAWN::BC_CPU::Betweenness_Centrality(graph, params.output_path);
   printf("%-21s%3.5lf\n", "Time:", elapsed_time);
-  // }
 
   return 0;
 }

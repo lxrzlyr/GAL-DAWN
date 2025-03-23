@@ -52,14 +52,13 @@ void DAWN::IO::readGraph_Directed(std::string& input_path,
     return;
   }
   std::string line;
+  int rows, cols;
+  int i = 0;
 
   graph.coo.col = new int[graph.nnz];
   graph.coo.row = new int[graph.nnz];
   std::fill_n(graph.coo.col, graph.nnz, 0);
   std::fill_n(graph.coo.row, graph.nnz, 0);
-
-  int rows, cols;
-  int i = 0;
 
   while (std::getline(file, line)) {
     if (line[0] == '%')
@@ -77,8 +76,6 @@ void DAWN::IO::readGraph_Directed(std::string& input_path,
   file.close();
 
   graph.nnz = i;
-  // std::cout << "nnz: " << graph.nnz << std::endl;
-
   transpose(graph.nnz, graph.coo);
   coo2Csr(graph.rows, graph.nnz, graph.csr, graph.coo);
 

@@ -163,7 +163,7 @@ bool DAWN::BFS_CPU::SOVMP(int* row_ptr,
                           bool*& beta,
                           int*& distance,
                           int step) {
-  bool converged = true;
+  bool is_converged = true;
 #pragma omp parallel for
   for (int j = 0; j < row; j++) {
     if (alpha[j]) {
@@ -174,12 +174,12 @@ bool DAWN::BFS_CPU::SOVMP(int* row_ptr,
           if (!distance[col[k]]) {
             distance[col[k]] = step;
             beta[col[k]] = true;
-            converged = false;
+            is_converged = false;
           }
         }
       }
       alpha[j] = false;
     }
   }
-  return converged;
+  return is_converged;
 }

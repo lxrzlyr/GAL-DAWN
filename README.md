@@ -32,7 +32,7 @@ The repository contributors and paper authors hold all rights to the code curren
 | MSSP                | V2.1    |
 | SSSP                | V2.1    |
 | BFS                 | V2.1    |
-| BC                  | Doing   |
+| BC                  | CPU Done; GPU Doing|
 | CC                  | V2.3    |
 | Cluster Analysis    | Future  |
 | Community Detection | Future  |
