@@ -1,83 +1,93 @@
-/**
- * @author lxrzlyr (1289539524@qq.com)
- * @date 2024-02-23
- *
- * @copyright Copyright (c) 2024
- */
-#include <dawn/graph.hxx>
-#include <dawn/io.hxx>
-void DAWN::Graph::createGraph(std::string& input_path, Graph::Graph_t& graph) {
-  std::ifstream file(input_path);
-  if (!file.is_open()) {
-    std::cerr << "Error opening file " << input_path << std::endl;
-    return;
+#include <dawn/graph/csr_graph.hxx>
+#include <dawn/graph/device_transfer.hxx>
+
+namespace DAWN {
+
+HostCsrGraph::HostCsrGraph(GraphMetadata metadata,
+                           HostBuffer<EdgeId> row_offsets,
+                           HostBuffer<VertexId> column_indices,
+                           HostBuffer<Weight> weights)
+    : metadata_(metadata),
+      row_offsets_(std::move(row_offsets)),
+      column_indices_(std::move(column_indices)),
+      weights_(std::move(weights)) {}
+
+StatusOr<HostCsrGraph> HostCsrGraph::Create(GraphMetadata metadata,
+                                            HostBuffer<EdgeId> row_offsets,
+                                            HostBuffer<VertexId> column_indices,
+                                            HostBuffer<Weight> weights) {
+  HostCsrGraph graph(metadata, std::move(row_offsets),
+                     std::move(column_indices), std::move(weights));
+  Status status = graph.Validate();
+  if (!status.ok()) {
+    return status;
   }
-
-  std::string line;
-  int rows, cols, nnz;
-
-  std::getline(file, line);
-  std::stringstream ss(line);
-  bool tmp_weight = false;
-  std::string format, object, matrixtype, datatype, direct;
-  ss >> format >> object >> matrixtype >> datatype >> direct;
-  if ((format == "%%MatrixMarket") && (matrixtype == "coordinate")) {
-    if (datatype == "pattern") {
-      tmp_weight = false;
-      if (graph.weighted != tmp_weight) {
-        std::cout << "This is an unweighted graph, but it has been instructed "
-                     "to use weighted functions for computation."
-                  << std::endl;
-      }
-    } else {
-      tmp_weight = true;
-      if (graph.weighted != tmp_weight) {
-        std::cout << "This is a weighted graph, and it has been instructed "
-                     "to use unweighted functions for computation. "
-                  << std::endl;
-      }
-    }
-    if (direct == "symmetric") {
-      graph.directed = false;
-    } else {
-      graph.directed = true;
-    }
-  } else {
-    std::cout << "invalid file" << std::endl;
-    return;
-  }
-
-  while (std::getline(file, line)) {
-    if (line[0] == '%')
-      continue;
-    std::stringstream ss(line);
-    ss >> rows >> cols >> nnz;
-    break;
-  }
-  file.close();
-
-  graph.rows = rows;
-  graph.cols = cols;
-  graph.nnz = nnz;
-  graph.source = graph.source % rows;
-
-  std::cout << "Read Input Graph" << std::endl;
-
-  if (graph.directed) {
-    if (graph.weighted) {
-      DAWN::IO::readGraph_Directed_Weighted(input_path, graph);
-      // std::cout << "readGraph_Directed_Weighted" << std::endl;
-    } else {
-      // std::cout << "readGraph_Directed" << std::endl;
-      DAWN::IO::readGraph_Directed(input_path, graph);
-    }
-  } else {
-    if (graph.weighted) {
-      DAWN::IO::readGraph_Weighted(input_path, graph);
-      // std::cout << "readGraph_Weighted" << std::endl;
-    } else {
-      DAWN::IO::readGraph(input_path, graph);
-      // std::cout << "readGraph" << std::endl;
-    }
-  }
+  return graph;
 }
+
+Status HostCsrGraph::Validate() const {
+  if (metadata_.num_vertices < 0) {
+    return Status(StatusCode::kInvalidArgument,
+                  "vertex count must be non-negative");
+  }
+  if (metadata_.num_edges < 0) {
+    return Status(StatusCode::kInvalidArgument,
+                  "edge count must be non-negative");
+  }
+
+  const size_t expected_rows = static_cast<size_t>(metadata_.num_vertices) + 1;
+  if (row_offsets_.size() != expected_rows) {
+    return Status(StatusCode::kInvalidArgument,
+                  "CSR row_offsets size must equal num_vertices + 1");
+  }
+  if (row_offsets_.empty() || row_offsets_[0] != 0) {
+    return Status(StatusCode::kInvalidArgument,
+                  "CSR row_offsets must start at zero");
+  }
+  if (row_offsets_[metadata_.num_vertices] != metadata_.num_edges) {
+    return Status(StatusCode::kInvalidArgument,
+                  "CSR terminal row offset must equal num_edges");
+  }
+  if (column_indices_.size() != static_cast<size_t>(metadata_.num_edges)) {
+    return Status(StatusCode::kInvalidArgument,
+                  "CSR column_indices size must equal num_edges");
+  }
+  if (metadata_.weighted &&
+      weights_.size() != static_cast<size_t>(metadata_.num_edges)) {
+    return Status(StatusCode::kInvalidArgument,
+                  "weighted CSR weights size must equal num_edges");
+  }
+  if (!metadata_.weighted && !weights_.empty()) {
+    return Status(StatusCode::kInvalidArgument,
+                  "unweighted CSR must not carry weights");
+  }
+
+  EdgeId previous = 0;
+  for (VertexId row = 0; row <= metadata_.num_vertices; ++row) {
+    const EdgeId current = row_offsets_[row];
+    if (current < previous || current < 0 || current > metadata_.num_edges) {
+      return Status(StatusCode::kInvalidArgument,
+                    "CSR row_offsets must be monotonic and in range");
+    }
+    previous = current;
+  }
+  for (EdgeId edge = 0; edge < metadata_.num_edges; ++edge) {
+    const VertexId col = column_indices_[edge];
+    if (col < 0 || col >= metadata_.num_vertices) {
+      return Status(StatusCode::kOutOfRange,
+                    "CSR column index is outside vertex range");
+    }
+  }
+  return Status::OK();
+}
+
+}  // namespace DAWN
+
+namespace DAWN {
+
+StatusOr<DeviceCsrGraph> to_device(dawnHandle_t, const HostCsrGraph&) {
+  return Status(StatusCode::kUnavailable,
+                "DAWN was built without CUDA device graph transfer support");
+}
+
+}  // namespace DAWN

@@ -1,0 +1,42 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+if(@DAWN_PACKAGE_HAS_OPENMP@)
+  find_dependency(OpenMP)
+  set(_dawn_openmp_definition DAWN_HAS_OPENMP=1)
+  set(_dawn_openmp_dependency OpenMP::OpenMP_CXX)
+else()
+  set(_dawn_openmp_definition DAWN_HAS_OPENMP=0)
+  set(_dawn_openmp_dependency "")
+endif()
+
+set(_dawn_lib_dir "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@")
+set(_dawn_libs
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_algorithms_cpu@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_kernels_cpu@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_runtime@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_io@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_graph@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_memory@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    "${_dawn_lib_dir}/@CMAKE_STATIC_LIBRARY_PREFIX@dawn_common@CMAKE_STATIC_LIBRARY_SUFFIX@")
+
+foreach(_dawn_lib IN LISTS _dawn_libs)
+  if(NOT EXISTS "${_dawn_lib}")
+    message(FATAL_ERROR "DAWN package is missing required library: ${_dawn_lib}")
+  endif()
+endforeach()
+
+if(NOT TARGET dawn::dawn)
+  add_library(dawn::dawn INTERFACE IMPORTED)
+  set_target_properties(dawn::dawn PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
+      INTERFACE_COMPILE_DEFINITIONS "DAWN_VERSION_STRING=\"@PROJECT_VERSION@\";${_dawn_openmp_definition};DAWN_HAS_CUDA=0"
+      INTERFACE_LINK_LIBRARIES "${_dawn_libs};${_dawn_openmp_dependency}")
+endif()
+
+unset(_dawn_openmp_dependency)
+unset(_dawn_openmp_definition)
+unset(_dawn_lib)
+unset(_dawn_libs)
+unset(_dawn_lib_dir)

@@ -1,63 +1,163 @@
-# GAL-DAWN: An Novel Graph Algorithm Library based on DAWN, CUDA/C++
+# GAL-DAWN
 
-GAL-DAWN is a novel Graph Algorithm Library, with all algorithms developed on the DAWN, utilizing CUDA and C++ for enhanced performance and efficiency.
+GAL-DAWN is a DAWN-based graph-computation library with a single user-facing
+executable, `dawn`, and a small public C++ API for graph loading, runtime
+management, and algorithm dispatch.
 
-DAWN is a novel shortest path algorithm that enhances parallelism through the use of matrix operations, thus eliminating the need for priority queues. Prior to this, mainstream research on optimizing shortest path algorithms primarily concentrated on improving the parallel performance of priority queues. For a more in-depth understanding of DAWN, please refer to the papers listed below.
+## Build
 
-DAWN and [Gunrock](https://github.com/gunrock/gunrock) have a well-established collaborative relationship. DAWN is included in the main branch of Gunrock and since the releases V2.1. When using the API for single-source shortest path tasks in Gunrock, the default implementation employs DAWN. If you prefer to use the original implementations in Gunrock, please follow the provided instructions to modify the source files accordingly.
+CPU-only builds do not require CUDA or OpenMP:
 
-If you intend to use DAWN as a baseline algorithm and aim to surpass its performance on the GPU, we recommend utilizing the DAWN API available in the Gunrock repository rather than the GPU functions in this repository. The GPU functions here are subject to modifications for testing optimization feasibilities, which may occasionally lead to suboptimal performance and potential misinterpretations of results. Gunrock is a specialized library for graph computing within CUDA-X, and its components are consistently reliable. 
+```bash
+cmake -S . -B build -DDAWN_BUILD_TESTS=ON -DDAWN_BUILD_CLI=ON -DDAWN_ENABLE_CUDA=OFF
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
 
-For CPU-based work, the above recommendation does not apply; you can directly use the code from this repository, and also can use the cpu reference implementation of DAWN in the Gunrock.
+OpenMP is optional. If it is not found, DAWN builds a single-thread CPU
+fallback and reports that at configure time.
 
-| [**Examples**](https://github.com/lxrzlyr/DAWN-An-Noval-SSSP-APSP-Algorithm/tree/dev/algorithm) | [**Documentation**](https://github.com/lxrzlyr/DAWN-An-Noval-SSSP-APSP-Algorithm/tree/dev/document) | [**Test**](https://github.com/lxrzlyr/DAWN-An-Noval-SSSP-APSP-Algorithm/tree/dev/test) |[**Gunrock**](https://github.com/gunrock/gunrock/tree/main/include/gunrock/algorithms)|
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |-------------------------------------------------------------------------------------- |
-- Examples: Demonstrate the usage of algorithms in GAL-DAWN.
-- Document: Provides the detailed description of GAL-DAWN, include the **Quick_Start** and **Code_Guide**. **Quick_Start** provides the guide for quickly working with GAL-DAWN. **Code_Guide** provides the detailed description for how to implement own algorithm in GAL-DAWN.
-- Test: Provides the detailed information of Testing.
-- Gunrock: Implementations in the Gunrock.
+CUDA is opt-in:
 
-We welcome any interest and ideas related to DAWN and its applications. If you are interested in DAWN algorithms and their applications, please feel free to share your thoughts via [email:1289539524@qq.com], and we will do our best to assist you in your research based on DAWN.
+```bash
+cmake -S . -B build-cuda -DDAWN_ENABLE_CUDA=ON -DDAWN_BUILD_TESTS=ON
+cmake --build build-cuda --parallel
+```
 
+## CLI
 
-## Development Status
+`dawn` is the primary entry point.
 
-The betweenness centrality implementation based on DAWN is currently under development, and CPU version has appeared in the dev branch. We have utilized an accumulation technique and graph traversal approach of DAWN that differs from the Brandes algorithm, which is a novel algorithm with lower time and space complexity, tentatively named BCDAWN. Moving forward, our focus will be on parallelizing the current CPU version and developing a GPU version. We plan to release a paper describing the technical details of the weighted version of DAWN and the BCDAWN algorithm at an appropriate time, and these implementations will be made available for early access. We still encourage colleagues to complete the implementation of the Brandes algorithm.
+```bash
+./build/dawn inspect --input validation/fixtures/tiny_unweighted.mtx
+./build/dawn kernels --algorithm bfs
+./build/dawn run --algorithm bfs --input validation/fixtures/tiny_unweighted.mtx --source 0 --backend auto
+./build/dawn run --algorithm sssp --input validation/fixtures/tiny_weighted.mtx --source 0 --backend auto
+./build/dawn run --algorithm mssp --input validation/fixtures/tiny_unweighted.mtx --source-list validation/fixtures/tiny_sources.txt --backend auto
+```
 
-The repository contributors and paper authors hold all rights to the code currently in the repository and the corresponding publications. If you are interested in work related to the DAWN algorithm and are developing new algorithms, please be mindful of not replicating the technical implementations currently in our repository. If you are working on engineering optimizations for algorithms like DAWN, please promptly create a fork and raise issues in this repository to avoid instances of plagiarism and preemptive paper publication.
+Supported commands:
 
-| Algorithm           | Release |
-| ------------------- | ------- |
-| APSP                | V2.1    |
-| MSSP                | V2.1    |
-| SSSP                | V2.1    |
-| BFS                 | V2.1    |
-| BC                  | CPU Done; GPU Doing|
-| CC                  | V2.3    |
-| Cluster Analysis    | Future  |
-| Community Detection | Future  |
+- `dawn run`
+- `dawn inspect`
+- `dawn kernels`
+- `dawn version`
 
-Further applications of these algorithms, such as community detection, clustering, and path planning, are also on our agenda. We will release new features of DAWN and the application algorithms based on DAWN on this repository. If the algorithms are also needed by Gunrock, we will contribute them to the Gunrock repository later.
+Supported algorithms:
 
-## How to Cite DAWN
-Thank you for citing our work. 
+- `bfs`
+- `sssp`
+- `mssp`
+- `apsp`
+- `cc`
+- `bc`
+
+Supported backend policies:
+
+- `auto`
+- `best`
+- `cpu`
+- `cuda`
+
+In CPU-only builds, `auto` and `best` select CPU. Requesting `cuda` returns an
+unavailable status.
+
+MSSP and APSP do not write full multi-source or all-pairs output by default.
+Use `--output-source N --output result.txt` to save one source row.
+
+## Graph Input
+
+The loader reads MatrixMarket coordinate graphs. It preserves the declared
+vertex count, validates index bounds, expands `symmetric` graphs, keeps
+`general` graphs directed, detects weighted inputs, and ignores self-loops by
+default.
+
+CSR storage enforces:
+
+- `row_offsets.size() == num_vertices + 1`
+- `row_offsets[0] == 0`
+- `row_offsets[num_vertices] == num_edges`
+
+Graph objects do not own runtime launch details such as source vertices,
+threads, streams, block sizes, or device ids.
+
+## Library Layers
+
+The production dependency direction is:
+
+```text
+src/dawn.cpp
+  -> src/algorithms.cpp
+  -> src/runtime.cpp
+  -> src/cpu_kernels.cpp and src/cpu_runner.hxx
+  -> src/graph.cpp and src/io.cpp
+  -> src/status.cpp
+  -> include/dawn/*
+  -> src/legacy/*
+```
+
+Public library APIs return `Status` or `StatusOr<T>`. CLI code owns process
+exit codes.
+
+## Quality Gates
+
+Useful validation commands:
+
+```bash
+cmake -S . -B build -DDAWN_BUILD_TESTS=ON
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+ctest --test-dir build -L unit --output-on-failure
+ctest --test-dir build -L smoke --output-on-failure
+```
+
+Optional checks:
+
+```bash
+cmake -S . -B build-asan -DDAWN_BUILD_TESTS=ON -DDAWN_ENABLE_SANITIZERS=ON
+cmake --build build-asan --parallel
+ctest --test-dir build-asan --output-on-failure
+
+cmake -S . -B build-format -DDAWN_ENABLE_FORMAT_CHECK=ON
+cmake --build build-format --target dawn_format_check
+```
+
+Correctness regression:
+
+```bash
+ctest --test-dir build -R dawn_correctness_generated --output-on-failure
+ctest --test-dir build -R dawn_correctness_generated_strict --output-on-failure
+```
+
+The generated correctness harness lives under `validation/correctness/` and
+records per-algorithm results independently. The strict target fails on any
+correctness mismatch.
+
+## Install And Consume
+
+```bash
+cmake -S . -B build-install -DDAWN_ENABLE_INSTALL=ON -DDAWN_BUILD_CLI=ON
+cmake --build build-install --parallel
+cmake --install build-install --prefix /tmp/dawn-install
+```
+
+Downstream CMake projects can use:
+
+```cmake
+find_package(dawn CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE dawn::dawn)
+```
+
+## Citation
 
 ```bibtex
 @inproceedings{dawn,
 author = {Feng, Yelai and Wang, Huaixi and Zhu, Yining and Liu, Xiandong and Lu, Hongyi and Liu, Qing},
 title = {DAWN: Matrix Operation-Optimized Algorithm for Shortest Paths Problem on Unweighted Graphs},
 year = {2024},
-isbn = {9798400706103},
 publisher = {Association for Computing Machinery},
-address = {New York, NY, USA},
-doi = {10.1145/3650200.3656600}, 
-url = {https://doi.org/10.1145/3650200.3656600},
-booktitle = {Proceedings of the 38th {ACM} International Conference on Supercomputing,  {ICS} 2024, Kyoto, Japan, June 4-7, 2024},
-pages = {1–13},
+doi = {10.1145/3650200.3656600},
+booktitle = {Proceedings of the 38th ACM International Conference on Supercomputing},
 series = {ICS '24}
 }
 ```
-This paper is nominated for the **Best Paper Award** at the 38th ACM International Conference on Supercomputing (ICS) 2024.
-## Copyright & License
-
-All source code are released under [Apache 2.0](https://github.com/lxrzlyr/DAWN-An-Noval-SSSP-APSP-Algorithm/blob/4266d98053678ce76e34be64477ac2364f0f4291/LICENSE).
