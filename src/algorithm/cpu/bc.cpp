@@ -4,18 +4,23 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/bc.hxx>
+#include <dawn_internal/algorithm/cpu/bc.hxx>
+#include <dawn_internal/openmp_compat.hxx>
 
-float DAWN::BC_CPU::Betweenness_Centrality(DAWN::Graph::Graph_t& graph,
-                                           std::string& output_path) {
+#include <chrono>
+
+DAWN::RunResult DAWN::BC_CPU::Betweenness_Centrality(
+    DAWN::Graph::Graph_t& graph,
+    std::string& output_path) {
   auto row = graph.rows;
   float* bc = new float[row]();
   float elapsed_time = 0.0f;
   int num_threads;
 #pragma omp parallel
-  { num_threads = omp_get_num_threads(); }
-// std::cout << "num_threads =" << num_threads << std::endl;
-#pragma omp parallel for reduction(+ : bc[:row]) reduction(+ : elapsed_time)
+  {
+    num_threads = omp_get_num_threads();
+  }
+#pragma omp parallel for reduction(+ : bc[ : row]) reduction(+ : elapsed_time)
   for (int i = 0; i < row; i++) {
     float* bc_temp = new float[row]();
     float elapsed_time_tmp = DAWN::BC_CPU::Betweenness_Centrality_run(
@@ -38,12 +43,14 @@ float DAWN::BC_CPU::Betweenness_Centrality(DAWN::Graph::Graph_t& graph,
     bc[i] = bc[i] / ((row - 1) * (row - 2));
   }
 
-  DAWN::IO::outfile(row, bc, output_path);
+  if (graph.print) {
+    DAWN::IO::outfile(row, bc, output_path);
+  }
 
   delete[] bc;
   bc = nullptr;
 
-  return (elapsed_time / (1000 * num_threads));
+  return DAWN::RunResult::ok(elapsed_time / (1000 * num_threads));
 }
 
 float DAWN::BC_CPU::Betweenness_Centrality_run(int* row_ptr,

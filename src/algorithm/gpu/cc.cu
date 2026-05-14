@@ -4,7 +4,12 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/gpu/cc.cuh>
+#include <dawn_internal/algorithm/gpu/cc.cuh>
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 
 float DAWN::CC_GPU::run(DAWN::Graph::Graph_t& graph, int source) {
   auto row = graph.rows;

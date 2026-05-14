@@ -1,132 +1,239 @@
-# How to write a new graph algorithm
+# Code Guide
 
-This document is intended as a reference for someone to implement a new graph algorithm based on DAWN. As an example, I’ll walk you through implementing a simple algorithm (Breadth-First Search). Let's get started!
+This guide explains how to extend GAL-DAWN 2.x. New development should
+integrate with the production library layers and the unified `dawn` CLI.
 
-## 1. Define the interface for the new algorithm
+## Repository Layers
 
-Create a new file in the `include/dawn/algorithm/cpu` directory called `example.hxx`. You should choose the cpu or gpu implementation based on the target device. We’ll use the cpu implementation as an example.
+The production dependency direction is:
+
+```text
+cli/dawn.cpp
+  -> include/dawn/algorithms + src/algorithms
+  -> include/dawn/runtime + src/runtime
+  -> src/adapters and src/dawn_internal adapters
+  -> src/algorithm/cpu, src/algorithm/gpu, and src/dawn_internal kernels
+  -> include/dawn/graph + src/graph
+  -> include/dawn/io + src/io
+  -> include/dawn/memory + src/memory
+  -> include/dawn/common + src/common
+```
+
+Keep new code inside this direction. Lower layers should not depend on higher
+layers.
+
+## Development Rules
+
+- Public APIs return `DAWN::Status` or `DAWN::StatusOr<T>`.
+- Prefer `DAWN::VertexId`, `DAWN::EdgeId`, and `DAWN::Weight` over raw integer
+  types in new public code.
+- Use `DAWN::HostCsrGraph` or `DAWN::CsrView` for graph input.
+- Keep CLI parsing in `cli/dawn.cpp`; do not add new top-level per-algorithm
+  user binaries.
+- Keep CUDA optional behind `DAWN_ENABLE_CUDA` and `DAWN_HAS_CUDA`.
+- Add tests under `validation/`.
+- Keep long-running performance experiments outside the production tree unless
+  they have an explicit build and validation path.
+
+## Adding A New Algorithm Operator
+
+The recommended path is:
+
+1. Add or modernize the kernel implementation.
+2. Add an operator-level options struct and `RunXxx` function.
+3. Register a kernel descriptor.
+4. Add CLI dispatch.
+5. Add validation coverage.
+
+The examples below use `pagerank` as a placeholder.
+
+### 1. Add A Public Operator Declaration
+
+Edit `include/dawn/algorithms/operators.hxx`.
 
 ```cpp
-#include <dawn/dawn.hxx>
-
 namespace DAWN {
-namespace Example_CPU {
+namespace Algorithms {
 
-// run
-Type run(Graph::Graph_t& graph,......);
+struct PagerankOptions {
+  int max_iterations = 20;
+  double tolerance = 1e-6;
+  std::string output_path;
+  std::string kernel_name;
+};
 
-// kernel
-Type kernel(Graph::Graph_t& graph,......);
+using PagerankResult = AlgorithmResult;
 
-}  // namespace Example_CPU
+StatusOr<PagerankResult> RunPagerank(
+    const HostCsrGraph& graph,
+    const PagerankOptions& options,
+    dawnHandle_t handle);
+
+}  // namespace Algorithms
 }  // namespace DAWN
 ```
 
-This includes the function signature, input and output types, and any additional parameters or constraints. We suggest to divide the run and kernel function, which will help you to locate the problems.
+If the algorithm fits the generic CLI dispatcher, also extend `RunAlgorithm`.
 
-## 2. Implement the new algorithm
+### 2. Implement The Operator
 
-Create a new file in the `src/dawn/algorithm/cpu` directory called `example.cpp`.
+Edit `src/algorithms/operators.cpp`.
 
-```cpp
-#include <dawn/algorithm/cpu/example.hxx>
+An operator should:
 
-// If you want to use the component of DAWN, you can include the hxx, such as,
-// #include <dawn/algorithm/cpu/bfs.hxx>
+- validate input graph properties;
+- validate option ranges;
+- call `ResolveKernel`;
+- create or adapt graph views for the kernel;
+- return `StatusOr<AlgorithmResult>`;
+- avoid `exit`, process-global state, or direct CLI parsing.
 
-Type DAWN::Example_CPU::run(Graph::Graph_t& graph,......)
-{
-    // ...
-    //  float result = DAWN::BFS_CPU::run(graph, output_path);
-    return result;
-}
-
-Type DAWN::Example_CPU::kernel(Graph::Graph_t& graph,......)
-{
-    // ...
-    return result;
-}
-
-```
-
-This includes the function implementation, which should be consistent with the function signature. We do not suggest to use the "using namespace XXX", which may cause errors, such as namespace conflicts or inability to find functions under the namespace. All references and definitions should use full names, including multiple namespaces.
-
-## 3. Add the main function of the new algorithm
-
-Create a new file in the `algorithm/cpu/example/` directory called `example_cpu.cpp`.
+Skeleton:
 
 ```cpp
-#include "dawn/algorithm/cpu/example.hxx"
+StatusOr<PagerankResult> RunPagerank(
+    const HostCsrGraph& graph,
+    const PagerankOptions& options,
+    dawnHandle_t handle) {
+  if (graph.num_vertices() == 0) {
+    return Status(StatusCode::kInvalidArgument, "PageRank requires vertices");
+  }
 
-int main(int argc, char** argv)
-{ 
-    DAWN::Graph::Graph_t graph;
-    DAWN::Graph::createGraph(input_path, graph);
-    // DAWN::Example_CPU::run(Graph::Graph_t& graph,......)
-    return 0;
+  SelectedDevice selected;
+  StatusOr<KernelDescriptor> kernel =
+      ResolveKernel("pagerank", graph, 1, options.kernel_name, handle,
+                    &selected);
+  if (!kernel.ok()) {
+    return kernel.status();
+  }
+
+  RunResult run = RunYourKernel(graph.view(), options);
+  if (!run.success) {
+    return Status(StatusCode::kInvalidArgument, run.error_msg);
+  }
+  return FromRunResult(run, kernel.value(), selected.backend);
 }
-
 ```
 
-This includes the main function of the new algorithm. The input parameters can be read through argv.
+### 3. Add Kernel Registration
 
-## 4. Add the new algorithm to the CMakeLists.txt
+Edit `src/runtime/kernel_registry.cpp`.
 
-The project is structured with a four-tier hierarchy of `CMakeLists.txt` files, designed to facilitate the integration of new components and streamline project management. The incorporation of additional components necessitates minimal modifications, as the majority of the foundational work has been accomplished.
-
-### 4.1. Create `CMakeLists.txt` file for the new algorithm
-
-Copy the `CMakeLists.txt` file from the `algorithm/cpu/XXX/` directory to the `algorithm/cpu/example/` directory. You will get a `CMakeLists.txt` file that looks like this:
-
-```cmake
-# Specify source
-file(GLOB SOURCES_CPP "${CMAKE_SOURCE_DIR}/src/algorithm/cpu/*.cpp" "${CMAKE_SOURCE_DIR}/src/*.cpp")
-
-# Add the executable
-add_executable(xxx_cpu xxx_cpu.cpp ${SOURCES_CPP})
-
-# Include directories
-target_include_directories(xxx_cpu PUBLIC "${CMAKE_SOURCE_DIR}/include")
-
-# Compile options
-target_compile_options(xxx_cpu PUBLIC -O3)
-
-# Find and link OpenMP
-find_package(OpenMP)
-if(OpenMP_CXX_FOUND)
-    target_compile_options(xxx_cpu PUBLIC -fopenmp)
-    target_link_libraries(xxx_cpu PUBLIC OpenMP::OpenMP_CXX)
-endif()
-
+```cpp
+registry.push_back(
+    {"cpu_pagerank", "pagerank", BackendKind::kCpu, true, true});
 ```
 
-"CTRL" + "F", use "example" to instead the "xxx". So easy!
+Set `supports_weighted` and `supports_unweighted` to match the actual kernel.
+If CUDA support exists, add CUDA descriptors behind `#if DAWN_HAS_CUDA`.
 
-### 4.2. Add the new algorithm to the `algorithm/cpu/CMakeLists.txt` file
+### 4. Add CLI Support
 
-```cmake
-# Add subdirectories conditionally
-add_subdirectory(bfs_cpu)
-# ...other component
-# Add new algorithm here, like this
-add_subdirectory(example_cpu)
+Edit `cli/dawn.cpp`.
+
+Add the algorithm name to help text and parse any new options. Then extend the
+call to `DAWN::Algorithms::RunAlgorithm` or call a dedicated operator function.
+
+CLI behavior should remain consistent:
+
+- invalid input prints a `Status` message and returns failure;
+- successful runs print `algorithm`, `backend`, `kernel`, and
+  `elapsed_seconds`;
+- large outputs should require an explicit `--output` option.
+
+### 5. Add Tests
+
+Use the validation layout:
+
+```text
+validation/
+  unit/
+  fixtures/
+  correctness/
+  downstream/
 ```
 
-With these modifications finalized, the remaining two levels of the `cmakelists.txt` will operate autonomously. There is no need for concern if you lack a GPU or are unsure about the GPU architecture; DAWN is designed to autonomously detect the presence of a GPU and identify compatible architectures. However, if you possess knowledge of these specifics, you have the option to specify them within `algorithm/gpu/CMakeLists.txt`.
+Add fast C++ unit tests when validating API behavior, parsing, or data
+structure invariants.
 
-## 5. Build the project
+Add generated correctness checks in
+`validation/correctness/generate_and_check.py` when Python can compute a clear
+reference result.
 
-Now you can compile your whole application as follows:
+The generated correctness suite should:
+
+- use deterministic graphs;
+- cover directed/undirected and weighted/unweighted cases when applicable;
+- keep runtime short;
+- report each algorithm independently.
+
+### 6. Update Documentation
+
+Update:
+
+- `document/Documentation.md` for the new operator reference;
+- `document/Quick_Start.md` if users need a new command example;
+- `README.md` only if the public surface changes.
+
+Do not add internal planning documents to `document/`. Temporary release notes,
+drafts, and private checklists belong under `tmp/`, which is ignored by Git.
+
+## Adding A New Data Type
+
+For public data types:
+
+1. Add declarations under `include/dawn/<layer>/`.
+2. Add implementations under `src/<layer>/`.
+3. Keep ownership explicit: owning types should be move-only unless copying is
+   intentionally supported.
+4. Add validation methods for structural invariants.
+5. Add unit coverage in `validation/unit/`.
+6. Document the type in `document/Documentation.md`.
+
+## Adding A New Input Format
+
+The current production reader is MatrixMarket. To add another format:
+
+1. Add a public header under `include/dawn/io/`.
+2. Implement the reader under `src/io/`.
+3. Return `StatusOr<HostCsrGraph>`.
+4. Preserve graph metadata: vertex count, directed flag, weighted flag, and CSR
+   invariants.
+5. Add fixtures under `validation/fixtures/`.
+6. Add unit tests in `validation/unit/`.
+
+## Adding A CUDA Path
+
+CUDA code must remain optional.
+
+- Guard public CUDA-only storage with `#if DAWN_HAS_CUDA`.
+- Add CUDA sources only under the `DAWN_ENABLE_CUDA` branch in `CMakeLists.txt`.
+- Link CUDA targets to `CUDA::cudart`.
+- Keep CPU-only builds working on machines without CUDA.
+
+## Validation Commands
+
+Run these before proposing a change:
 
 ```bash
-mkdir build && cd build
-cmake .. && make -j
+cmake -S . -B build -DDAWN_BUILD_TESTS=ON -DDAWN_BUILD_CLI=ON -DDAWN_ENABLE_CUDA=OFF
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-## 6. Run the new algorithm
-
-If compilation succeeds without errors, you can run your code as follows:
+Optional checks:
 
 ```bash
-./example_cpu ../data/example.mtx ../data/example_output.txt
+cmake -S . -B build-format -DDAWN_ENABLE_FORMAT_CHECK=ON
+cmake --build build-format --target dawn_format_check
+```
+
+Install/export smoke:
+
+```bash
+cmake -S . -B build-install -DDAWN_ENABLE_INSTALL=ON -DDAWN_BUILD_CLI=ON
+cmake --build build-install --parallel
+cmake --install build-install --prefix /tmp/dawn-install
+cmake -S validation/downstream -B /tmp/dawn-downstream-build -DCMAKE_PREFIX_PATH=/tmp/dawn-install
+cmake --build /tmp/dawn-downstream-build --parallel
 ```

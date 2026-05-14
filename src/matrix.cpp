@@ -1,4 +1,8 @@
-#include <dawn/matrix.hxx>
+#include <dawn_internal/matrix.hxx>
+
+#include <algorithm>
+#include <utility>
+#include <vector>
 
 void DAWN::Matrix::transpose_Weighted(int nnz, DAWN::Matrix::Coo_t& coo) {
   std::vector<std::pair<int, std::pair<int, float>>> tmp;
@@ -33,7 +37,6 @@ void DAWN::Matrix::coo2Csr_Weighted(int n,
   csr.row_ptr = new int[n + 1];
   csr.col = new int[nnz];
 
-  // Count the number of non-zero elements in each column
   int* row_count = new int[n]();
   for (int i = 0; i < nnz; i++) {
     row_count[coo.row[i]]++;
@@ -43,7 +46,6 @@ void DAWN::Matrix::coo2Csr_Weighted(int n,
     csr.row_ptr[i] = csr.row_ptr[i - 1] + row_count[i - 1];
   }
 
-// Fill each non-zero element into val and col
 #pragma omp parallel for
   for (int i = 0; i < n; i++) {
     for (int j = csr.row_ptr[i]; j < csr.row_ptr[i + 1]; j++) {
@@ -61,7 +63,6 @@ void DAWN::Matrix::coo2Csr(int n,
   csr.row_ptr = new int[n + 1];
   csr.col = new int[nnz];
 
-  // Count the number of non-zero elements in each column
   int* row_count = new int[n]();
   for (int i = 0; i < nnz; i++) {
     row_count[coo.row[i]]++;
@@ -71,7 +72,6 @@ void DAWN::Matrix::coo2Csr(int n,
     csr.row_ptr[i] = csr.row_ptr[i - 1] + row_count[i - 1];
   }
 
-// Fill each non-zero element into val and col
 #pragma omp parallel for
   for (int i = 0; i < n; i++) {
     for (int j = csr.row_ptr[i]; j < csr.row_ptr[i + 1]; j++) {

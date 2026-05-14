@@ -4,15 +4,16 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/mssp.hxx>
+#include <dawn_internal/algorithm/cpu/mssp.hxx>
 
-float DAWN::MSSP_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
+DAWN::RunResult DAWN::MSSP_CPU::run(Graph::Graph_t& graph,
+                                    std::string& output_path) {
   float elapsed_time = 0.0f;
   auto row = graph.rows;
 
 #pragma omp parallel for reduction(+ : elapsed_time)
-  for (int i = 0; i < graph.msource.size(); i++) {
-    int source = graph.msource[i] % row;
+  for (int i = 0; i < static_cast<int>(graph.msource.size()); i++) {
+    int source = graph.msource[static_cast<size_t>(i)] % row;
     if (graph.csr.row_ptr[source] == graph.csr.row_ptr[source + 1]) {
       continue;
     }
@@ -28,5 +29,5 @@ float DAWN::MSSP_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
     elapsed_time += time;
   }
   elapsed_time = elapsed_time / (graph.thread * 1000);
-  return elapsed_time;
+  return DAWN::RunResult::ok(elapsed_time);
 }

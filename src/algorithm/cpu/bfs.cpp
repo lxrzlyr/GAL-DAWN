@@ -4,19 +4,23 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/bfs.hxx>
+#include <dawn_internal/algorithm/cpu/bfs.hxx>
 
-float DAWN::BFS_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+
+DAWN::RunResult DAWN::BFS_CPU::run(Graph::Graph_t& graph,
+                                   std::string& output_path) {
   int source = graph.source;
   auto row = graph.rows;
   if (graph.csr.row_ptr[source] == graph.csr.row_ptr[source + 1]) {
-    std::cout << "Source is isolated node, please check" << std::endl;
-    exit(0);
+    return DAWN::RunResult::err("Source is isolated node, please check");
   }
   float elapsed_time = DAWN::BFS_CPU::BFS(graph.csr.row_ptr, graph.csr.col, row,
                                           source, graph.print, output_path) /
                        1000;
-  return elapsed_time;
+  return DAWN::RunResult::ok(elapsed_time);
 }
 
 // kernel
@@ -139,6 +143,7 @@ int DAWN::BFS_CPU::SOVM(int* row_ptr,
                         int*& distance,
                         int step,
                         int entry) {
+  (void)row;
   int tmpEntry = 0;
   for (int j = 0; j < entry; j++) {
     int start = row_ptr[alpha[j]];

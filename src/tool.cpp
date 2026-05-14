@@ -1,4 +1,7 @@
-#include <dawn/tool.hxx>
+#include <dawn_internal/tool.hxx>
+
+#include <cstdint>
+#include <iostream>
 
 float DAWN::Tool::average(int* result, int n) {
   int64_t sum = 0;
@@ -29,7 +32,11 @@ void DAWN::Tool::infoprint(int entry,
                            int interval,
                            int thread,
                            float elapsed_time) {
-  if (entry % (total / interval) == 0) {
+  int divisor = total / interval;
+  if (divisor <= 0) {
+    divisor = 1;
+  }
+  if (entry % divisor == 0) {
     float completion_percentage =
         static_cast<float>(entry * 100.0f) / static_cast<float>(total);
     std::cout << "Progress: " << completion_percentage << "%" << std::endl;

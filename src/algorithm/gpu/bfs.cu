@@ -4,7 +4,11 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/gpu/bfs.cuh>
+#include <dawn_internal/algorithm/gpu/bfs.cuh>
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 
 __global__ void SOVM(const int* row_ptr,
                      const int* col,

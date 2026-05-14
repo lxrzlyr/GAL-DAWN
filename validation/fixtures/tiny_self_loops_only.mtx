@@ -1,0 +1,6 @@
+%%MatrixMarket matrix coordinate pattern symmetric
+% Self loops are ignored, leaving zero effective edges.
+3 3 2
+1 1
+3 3
+

@@ -1,0 +1,7 @@
+%%MatrixMarket matrix coordinate pattern symmetric
+% Tiny undirected graph.
+4 4 3
+1 2
+2 3
+3 4
+

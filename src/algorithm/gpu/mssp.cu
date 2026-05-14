@@ -4,7 +4,10 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/gpu/mssp.cuh>
+#include <dawn_internal/algorithm/gpu/mssp.cuh>
+
+#include <cstdio>
+#include <iostream>
 
 float DAWN::MSSP_GPU::run(DAWN::Graph::Graph_t& graph,
                           std::string& output_path) {

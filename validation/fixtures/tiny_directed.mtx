@@ -1,0 +1,6 @@
+%%MatrixMarket matrix coordinate pattern general
+% Tiny directed graph.
+3 3 2
+1 2
+2 3
+

@@ -1,92 +1,126 @@
-# Quick Start Guide
+# Quick Start
 
-## 0. Before getting started
+This guide gets a user from a fresh checkout to a working GAL-DAWN 2.x command
+line run. The production entry point is `dawn`.
 
-If the machine does not have a GPU available, DAWN will automatically detect the CUDA environment and only build artifacts for the CPU.
+## Requirements
 
-```c++
-export PROJECT_ROOT="to_your_project_path"
-```
-## 1. Modify $PROJECT_ROOT/algorithm/gpu/CMakeLists.txt
+- CMake 3.16 or newer.
+- A C++14 compiler.
+- CUDA is optional and disabled by default.
+- OpenMP is optional. If OpenMP is not found, DAWN builds a single-thread CPU
+  fallback.
 
-If you want to use the GPU version of DAWN, you need to modify the following code in $PROJECT_ROOT/algorithm/gpu/CMakeLists.txt. According to your GPU, we use RTX 3080TI for computing, so CUDA_ARCHITECTURES is set to 86.
+## Build And Test
 
-```c++
-set(CUDA_ARCHITECTURES "86")
-```
-
-Certainly, if you are unaware of the CUDA_ARCHITECTURES, we have implemented code to automatically select the CUDA_ARCHITECTURES. However, this may not necessarily be the most optimal choice.
-
-If you are certain that the machine has a usable GPU and you have been unable to build artifacts for the GPU correctly, we suspect there may be an issue with the CUDA environment. Please further check for any path-related problems.
-
-## 2. Download testing data
-
-Unzip the compressed package and put it in the directory you need. The input data can be found on the Science Data Bank.
-
-```c++
-URL=https://www.scidb.cn/s/6BjM3a
-GRAPH_DIR="to_your_graph_path"
+```bash
+cmake -S . -B build -DDAWN_BUILD_TESTS=ON -DDAWN_BUILD_CLI=ON -DDAWN_ENABLE_CUDA=OFF
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-## 3. Dependencies
+The executable is written to:
 
-DAWN builds, runs, and has been tested on Ubuntu/Rocky Linux. Even though DAWN may work on other linux systems, we have not tested correctness or performance. DAWN is not available on Windows and cannot achieve the same performance on WSL systems. Please beware.
-
-At the minimum, DAWN depends on the following software:
-
-```c++
-- A modern C++ compiler compliant with the C++ 14 standard
-- GCC (>= 9.4.0 or Clang >= 10.0.0)
-- CMake (>= 3.10)
-- libomp (>= 10.0)
+```bash
+./build/dawn
 ```
 
-If you need run DAWN on the GPU, expand:
+## Inspect A Graph
 
-```c++
-- CUDA (>= 11.0)
-- thrust (>= 2.0)
+```bash
+./build/dawn inspect --input validation/fixtures/tiny_unweighted.mtx
 ```
 
-## 4. Build and RUN
+This prints the vertex count, edge count, directed/weighted flags, CSR format,
+and degree summary.
 
-```c++
-cd $PROJECT_ROOT
-mkdir build && cd build
-cmake .. && make -j
+## List Kernels
+
+```bash
+./build/dawn kernels
+./build/dawn kernels --algorithm bfs
 ```
 
-If compilation succeeds without errors, you can run your code as before, for example
+CPU kernels are available in the default CPU-only build. CUDA kernels require
+`DAWN_ENABLE_CUDA=ON`.
 
-```c++
-cd $PROJECT_ROOT/build
-./sssp_cpu $GRAPH_DIR/XX.mtx ../output.txt false 0
-./sssp_gpu $GRAPH_DIR/XXX.mtx ../output.txt 1024 false 0
+## Run Algorithms
+
+Breadth-first search on an unweighted graph:
+
+```bash
+./build/dawn run --algorithm bfs --input validation/fixtures/tiny_unweighted.mtx --source 0
 ```
 
-If you need to use DAWN in your own solution, please check the source code under the **src**，**include** folder and call them.
+Single-source shortest path on a weighted graph:
 
-### 4.1 Using script
-
-```c++
-cd ..
-vim ./process.sh
-MAIN = ${main}
-GRAPH_DIR = ${test_graph}
-OUTPUT= ${outputfile}
-LOG_DIR= ${GRAPH_DIR}/log
-ESC && wq
-sudo chmod +x ../process.sh
-bash ../process.sh
+```bash
+./build/dawn run --algorithm sssp --input validation/fixtures/tiny_weighted.mtx --source 0
 ```
 
-Please note that the normal operation of the batch script needs to ensure that the test machine meets the minimum requirements. Insufficient memory or GPU memory needs to be manually adjusted according to amount of resources. For the GPU version, please make sure that there is enough GPU memory for the graph. 
+Multi-source shortest path:
 
-```c++
-// For general graphs
-CPU: Multi-threaded processor supporting OpenMP API
-RAM: 8GB or more
-GPU: 1GB or more
-Compiler: NVCC of CUDA 11.0 above
-OS:  Ubuntu 20.04 and above
+```bash
+./build/dawn run --algorithm mssp --input validation/fixtures/tiny_unweighted.mtx --source-list validation/fixtures/tiny_sources.txt
 ```
+
+All-pairs shortest path:
+
+```bash
+./build/dawn run --algorithm apsp --input validation/fixtures/tiny_unweighted.mtx
+```
+
+Closeness centrality:
+
+```bash
+./build/dawn run --algorithm cc --input validation/fixtures/tiny_unweighted.mtx --source 0
+```
+
+Betweenness centrality:
+
+```bash
+./build/dawn run --algorithm bc --input validation/fixtures/tiny_unweighted.mtx
+```
+
+## Save Output
+
+For BFS, SSSP, and BC, pass `--output`:
+
+```bash
+./build/dawn run --algorithm bfs --input validation/fixtures/tiny_unweighted.mtx --source 0 --output /tmp/bfs.out
+```
+
+MSSP and APSP do not save full multi-source or all-pairs output by default. To
+save one source row:
+
+```bash
+./build/dawn run --algorithm mssp --input validation/fixtures/tiny_unweighted.mtx --source-list validation/fixtures/tiny_sources.txt --output-source 0 --output /tmp/mssp_0.out
+./build/dawn run --algorithm apsp --input validation/fixtures/tiny_unweighted.mtx --output-source 0 --output /tmp/apsp_0.out
+```
+
+## Input Format
+
+GAL-DAWN reads MatrixMarket coordinate matrices:
+
+```text
+%%MatrixMarket matrix coordinate pattern symmetric
+4 4 3
+1 2
+2 3
+3 4
+```
+
+- `pattern` inputs are unweighted.
+- `real` inputs are weighted.
+- `symmetric` inputs are expanded to undirected CSR.
+- `general` inputs are kept directed.
+- Self-loops are ignored by default.
+
+## CUDA Build
+
+```bash
+cmake -S . -B build-cuda -DDAWN_ENABLE_CUDA=ON -DDAWN_BUILD_TESTS=ON -DDAWN_CUDA_ARCHITECTURES=86
+cmake --build build-cuda --parallel
+```
+
+CPU-only builds are sufficient on machines without CUDA.

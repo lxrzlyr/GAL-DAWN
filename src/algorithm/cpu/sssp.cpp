@@ -4,20 +4,25 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/sssp.hxx>
+#include <dawn_internal/algorithm/cpu/sssp.hxx>
 
-float DAWN::SSSP_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <limits>
+
+DAWN::RunResult DAWN::SSSP_CPU::run(Graph::Graph_t& graph,
+                                    std::string& output_path) {
   int source = graph.source;
   auto row = graph.rows;
   if (graph.csr.row_ptr[source] == graph.csr.row_ptr[source + 1]) {
-    std::cout << "Source is isolated node, please check" << std::endl;
-    exit(0);
+    return DAWN::RunResult::err("Source is isolated node, please check");
   }
   float elapsed_time =
       DAWN::SSSP_CPU::SSSP(graph.csr.row_ptr, graph.csr.col, graph.csr.val, row,
                            source, graph.print, output_path) /
       1000;
-  return elapsed_time;
+  return DAWN::RunResult::ok(elapsed_time);
 }
 
 float DAWN::SSSP_CPU::SSSP(int* row_ptr,
@@ -147,14 +152,16 @@ int DAWN::SSSP_CPU::GOVM(int* row_ptr,
                          float*& distance,
                          int source,
                          int entry) {
+  (void)row;
   int tmpEntry = 0;
   for (int j = 0; j < entry; j++) {
-    int start = row_ptr[alpha[j]];
-    int end = row_ptr[alpha[j] + 1];
+    int current = alpha[j];
+    int start = row_ptr[current];
+    int end = row_ptr[current + 1];
     if (start != end) {
       for (int k = start; k < end; k++) {
         int index = col[k];
-        float tmp = distance[j] + val[k];
+        float tmp = distance[current] + val[k];
         if ((distance[index] > tmp) && (index != source)) {
           distance[index] = std::min(distance[index], tmp);
           beta[tmpEntry] = index;

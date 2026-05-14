@@ -4,34 +4,36 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/cc.hxx>
-float DAWN::CC_CPU::run(Graph::Graph_t& graph,
-                        int source,
-                        float& elapsed_time) {
+#include <dawn_internal/algorithm/cpu/cc.hxx>
+
+#include <algorithm>
+#include <chrono>
+#include <limits>
+#include <numeric>
+
+DAWN::RunResult DAWN::CC_CPU::run(Graph::Graph_t& graph, int source) {
   auto row = graph.rows;
   if (graph.csr.row_ptr[source] == graph.csr.row_ptr[source + 1]) {
-    std::cout << "Source is isolated node, please check" << std::endl;
-    exit(0);
+    return DAWN::RunResult::err("Source is isolated node, please check");
   }
+  float elapsed_time = 0.0f;
   float Closeness_Centrality = DAWN::CC_CPU::kernel(
       graph.csr.row_ptr, graph.csr.col, row, source, elapsed_time);
 
-  return Closeness_Centrality;
+  return DAWN::RunResult::ok(elapsed_time, Closeness_Centrality);
 }
 
-float DAWN::CC_CPU::run_Weighted(Graph::Graph_t& graph,
-                                 int source,
-                                 float& elapsed_time) {
+DAWN::RunResult DAWN::CC_CPU::run_Weighted(Graph::Graph_t& graph, int source) {
   auto row = graph.rows;
   if (graph.csr.row_ptr[source] == graph.csr.row_ptr[source + 1]) {
-    std::cout << "Source is isolated node, please check" << std::endl;
-    exit(0);
+    return DAWN::RunResult::err("Source is isolated node, please check");
   }
+  float elapsed_time = 0.0f;
   float Closeness_Centrality =
       DAWN::CC_CPU::kernel_Weighted(graph.csr.row_ptr, graph.csr.col,
                                     graph.csr.val, row, source, elapsed_time);
 
-  return Closeness_Centrality;
+  return DAWN::RunResult::ok(elapsed_time, Closeness_Centrality);
 }
 
 float DAWN::CC_CPU::kernel(int* row_ptr,
@@ -74,8 +76,14 @@ float DAWN::CC_CPU::kernel(int* row_ptr,
   elapsed_time += elapsed_time_tmp.count();
 
   distance[source] = 0;
+  float total_distance = 0.0f;
+  for (int i = 0; i < row; ++i) {
+    total_distance += static_cast<float>(distance[i]);
+  }
   float closeness_centrality =
-      (row - 1) / std::accumulate(distance, distance + row, 0);
+      total_distance == 0.0f
+          ? 0.0f
+          : (static_cast<float>(row) - 1.0f) / total_distance;
 
   delete[] beta;
   beta = nullptr;

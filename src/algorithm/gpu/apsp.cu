@@ -4,7 +4,9 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/gpu/apsp.cuh>
+#include <dawn_internal/algorithm/gpu/apsp.cuh>
+
+#include <iostream>
 
 float DAWN::APSP_GPU::run_Weighted(DAWN::Graph::Graph_t& graph,
                                    std::string& output_path) {

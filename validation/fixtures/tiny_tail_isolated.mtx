@@ -1,0 +1,6 @@
+%%MatrixMarket matrix coordinate pattern symmetric
+% Vertex 5 is tail isolated.
+5 5 2
+1 2
+2 3
+

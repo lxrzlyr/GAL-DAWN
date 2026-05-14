@@ -4,7 +4,12 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/gpu/sssp.cuh>
+#include <dawn_internal/algorithm/gpu/sssp.cuh>
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 
 /**
  * @brief CUDA natively doesn't support atomicMin on float based addresses and

@@ -4,9 +4,13 @@
  *
  * @copyright Copyright (c) 2024
  */
-#include <dawn/algorithm/cpu/apsp.hxx>
+#include <dawn_internal/algorithm/cpu/apsp.hxx>
+#include <dawn_internal/tool.hxx>
 
-float DAWN::APSP_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
+#include <iostream>
+
+DAWN::RunResult DAWN::APSP_CPU::run(Graph::Graph_t& graph,
+                                    std::string& output_path) {
   float elapsed_time = 0.0f;
   int proEntry = 0;
   auto row = graph.rows;
@@ -43,5 +47,5 @@ float DAWN::APSP_CPU::run(Graph::Graph_t& graph, std::string& output_path) {
       << std::endl;
 
   elapsed_time = elapsed_time / (graph.thread * 1000);
-  return elapsed_time;
+  return DAWN::RunResult::ok(elapsed_time);
 }

@@ -1,1 +1,1 @@
-#include <dawn/algorithm/gpu/bc.cuh>
+#include <dawn_internal/algorithm/gpu/bc.cuh>
