@@ -1,0 +1,72 @@
+name: CUDA smoke test (simulated H100)
+
+# Optional check. Hosted runners have no GPU, so this builds the CUDA kernels
+# and runs the smoke and unit tests with a simulated NVIDIA H100
+# (https://github.com/pantheongpu/pantheonsim). It complements real-GPU
+# testing and does not replace it.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "validation/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/gpu-sim.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cuda-sim:
+    name: CUDA 13.0, simulated H100
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Set up the simulated GPU and CUDA toolkit
+        uses: pantheongpu/setup-pantheonsim@656f502ef4782d94d34d8ddd368e333960609639 # v0.1.8
+        with:
+          gpu: nvidia/h100
+          cuda-toolkit: "13.0"
+
+      # The simulator runs PTX only (90-virtual) and needs a shared CUDA
+      # runtime. CUDA 13 needs C++17 for thrust.
+      - name: Configure project
+        run: |
+          cmake -B build -S . \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.0/bin/nvcc \
+                -DCUDAToolkit_ROOT=/usr/local/cuda-13.0 \
+                -DCMAKE_CUDA_RUNTIME_LIBRARY=Shared \
+                -DCMAKE_CUDA_STANDARD=17 \
+                -DDAWN_CUDA_ARCHITECTURES=90-virtual \
+                -DDAWN_ENABLE_CUDA=ON \
+                -DDAWN_ENABLE_OPENMP=OFF \
+                -DDAWN_BUILD_TESTS=ON
+
+      - name: Build project
+        run: cmake --build build -j3
+
+      - name: Run smoke and unit tests
+        working-directory: build
+        run: |
+          vgpu run ctest -L "smoke|unit" --output-on-failure | tee ctest.log
+          test "${PIPESTATUS[0]}" -eq 0
+
+      # Fail if the CUDA kernel did not run on the simulated device.
+      - name: Check the CUDA path ran on the device
+        working-directory: build/validation
+        run: |
+          vgpu run ../dawn_cuda_bfs_smoke 2>&1 | tee cuda.log
+          grep -q "virtual GPU platform initialized: 1 x nvidia/h100" cuda.log
+          grep -q "PASS: CUDA BFS matched" cuda.log

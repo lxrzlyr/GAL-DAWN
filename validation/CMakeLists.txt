@@ -100,3 +100,17 @@ if(TARGET dawn_cli)
         LABELS "correctness;regression;strict")
   endif()
 endif()
+
+if(DAWN_ENABLE_CUDA)
+  add_executable(dawn_cuda_bfs_smoke
+      unit/cuda_bfs_smoke.cu)
+  target_link_libraries(dawn_cuda_bfs_smoke PRIVATE dawn_kernels_cuda)
+  dawn_add_internal_includes(dawn_cuda_bfs_smoke)
+  set_target_properties(dawn_cuda_bfs_smoke PROPERTIES
+      CUDA_ARCHITECTURES "${DAWN_CUDA_ARCHITECTURES}")
+  add_test(NAME dawn_cuda_bfs_smoke COMMAND dawn_cuda_bfs_smoke
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  set_tests_properties(dawn_cuda_bfs_smoke PROPERTIES
+      LABELS "smoke;cuda"
+      PASS_REGULAR_EXPRESSION "PASS: CUDA BFS matched")
+endif()
